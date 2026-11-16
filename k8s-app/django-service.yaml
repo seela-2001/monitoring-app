@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-app
+  namespace: monitoring-demo
+  labels:
+    app: django-app   # الـ ServiceMonitor هيختار الـ Service بالـ label ده
+spec:
+  selector:
+    app: django-app
+  ports:
+    - name: http      # اسم الـ port مهم للـ ServiceMonitor
+      port: 8000
+      targetPort: http

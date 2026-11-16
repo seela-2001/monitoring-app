@@ -1,0 +1,67 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: django-app-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: django-app
+      rules:
+        - alert: DjangoAppDown
+          expr: absent(up{job="django-app", namespace="monitoring-demo"} == 1)
+          for: 1m
+          labels:
+            severity: critical
+            notify: email
+          annotations:
+            summary: "Django app is down"
+            description: "Prometheus can't scrape django-app in monitoring-demo for more than 1 minute."
+
+        - alert: DjangoHighErrorRate
+          expr: |
+            sum(rate(django_http_responses_total_by_status_total{namespace="monitoring-demo", status=~"5.."}[2m]))
+            /
+            sum(rate(django_http_responses_total_by_status_total{namespace="monitoring-demo"}[2m]))
+            > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            notify: email
+          annotations:
+            summary: "High 5xx error rate"
+            description: "More than 5% of responses are 5xx over the last 2 minutes (current: {{ $value | humanizePercentage }})."
+
+        - alert: DjangoHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(django_http_requests_latency_seconds_by_view_method_bucket{namespace="monitoring-demo"}[5m]))
+            ) > 1
+          for: 2m
+          labels:
+            severity: warning
+            notify: email
+          annotations:
+            summary: "p95 latency above 1s"
+            description: "95th percentile request latency is {{ $value | humanizeDuration }}."
+
+        - alert: DjangoPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="monitoring-demo"}[10m]) > 2
+          for: 1m
+          labels:
+            severity: warning
+            notify: email
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting"
+            description: "Container {{ $labels.container }} restarted more than 2 times in 10 minutes."
+
+        - alert: PostgresNotReady
+          expr: kube_statefulset_status_replicas_ready{namespace="monitoring-demo", statefulset="postgres"} < 1
+          for: 2m
+          labels:
+            severity: critical
+            notify: email
+          annotations:
+            summary: "Postgres is not ready"
+            description: "The postgres StatefulSet has no ready replicas."
